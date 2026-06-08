@@ -9,6 +9,8 @@ import * as core from '@actions/core'
 import * as github from '@actions/github'
 import * as PackageJSON from '../package.json'
 
+const API_VERSION = '2026-03-10' // Latest API version as of March 2026, update as needed
+
 type Workflow = {
   id: number
   name: string
@@ -80,6 +82,7 @@ async function run(): Promise<void> {
         ref: ref,
         inputs: inputs,
         return_run_details: true,
+        headers: { 'x-github-api-version': API_VERSION },
       },
     )
 
@@ -90,13 +93,14 @@ async function run(): Promise<void> {
     const waitForCompletion = core.getInput('wait-for-completion') === 'true'
     const syncStatus = core.getInput('sync-status') === 'true'
     const timeoutSeconds = parseInt(core.getInput('wait-timeout-seconds') || '900', 10) // Default to 15 minutes
+    const waitIntervalSeconds = parseInt(core.getInput('wait-interval-seconds') || '5', 10) // Default to 5 seconds
     let runStatus = 'in_progress'
 
     // Polling loop to check workflow run status until it completes or times out
     if (waitForCompletion) {
       core.info(`⏳ Waiting for workflow run to complete with a timeout of ${timeoutSeconds} seconds...`)
       const startTime = Date.now()
-      while (runStatus === 'in_progress' || runStatus === 'queued' || runStatus === 'waiting') {
+      while (runStatus === 'in_progress' || runStatus === 'queued' || runStatus === 'waiting' || runStatus === 'pending') {
         if ((Date.now() - startTime) / 1000 > timeoutSeconds) {
           core.warning(
             `⚠️ Workflow run did not complete within ${timeoutSeconds} seconds, timing out.\nNote: The workflow is still running but we have stopped waiting. You can check the run status here: ${dispatchResp.data.html_url}`,
@@ -105,10 +109,13 @@ async function run(): Promise<void> {
           break
         }
 
-        await new Promise((resolve) => setTimeout(resolve, 5000)) // Wait for 5 seconds before polling again
+        await new Promise((resolve) => setTimeout(resolve, waitIntervalSeconds * 1000)) // Wait for waitIntervalSeconds before polling again
 
         const { data: runData } = await octokit.request(
           `GET /repos/${owner}/${repo}/actions/runs/${dispatchResp.data.workflow_run_id}`,
+          {
+            headers: { 'x-github-api-version': API_VERSION },
+          },
         )
         runStatus = runData.status
         core.info(`🔄 Current run status: ${runStatus}`)
@@ -133,6 +140,9 @@ async function run(): Promise<void> {
       // Get the final conclusion of the workflow run if we were waiting for completion
       const { data: finalRunData } = await octokit.request(
         `GET /repos/${owner}/${repo}/actions/runs/${dispatchResp.data.workflow_run_id}`,
+        {
+          headers: { 'x-github-api-version': API_VERSION },
+        },
       )
       const conclusion = finalRunData.conclusion
 

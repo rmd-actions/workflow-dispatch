@@ -23584,9 +23584,10 @@ function getOctokit(token, options, ...additionalPlugins) {
 }
 
 // package.json
-var version = "1.3.0";
+var version = "1.3.2";
 
 // src/main.ts
+var API_VERSION = "2026-03-10";
 async function run() {
   info(`\u{1F3C3} Workflow Dispatch Action v${version}`);
   try {
@@ -23625,7 +23626,8 @@ async function run() {
       {
         ref,
         inputs,
-        return_run_details: true
+        return_run_details: true,
+        headers: { "x-github-api-version": API_VERSION }
       }
     );
     info(`\u{1F3C6} API response status: ${dispatchResp.status}`);
@@ -23633,6 +23635,7 @@ async function run() {
     const waitForCompletion = getInput("wait-for-completion") === "true";
     const syncStatus = getInput("sync-status") === "true";
     const timeoutSeconds = parseInt(getInput("wait-timeout-seconds") || "900", 10);
+    const waitIntervalSeconds = parseInt(getInput("wait-interval-seconds") || "5", 10);
     let runStatus = "in_progress";
     if (waitForCompletion) {
       info(`\u23F3 Waiting for workflow run to complete with a timeout of ${timeoutSeconds} seconds...`);
@@ -23646,9 +23649,12 @@ Note: The workflow is still running but we have stopped waiting. You can check t
           runStatus = "timed_out";
           break;
         }
-        await new Promise((resolve) => setTimeout(resolve, 5e3));
+        await new Promise((resolve) => setTimeout(resolve, waitIntervalSeconds * 1e3));
         const { data: runData } = await octokit.request(
-          `GET /repos/${owner}/${repo}/actions/runs/${dispatchResp.data.workflow_run_id}`
+          `GET /repos/${owner}/${repo}/actions/runs/${dispatchResp.data.workflow_run_id}`,
+          {
+            headers: { "x-github-api-version": API_VERSION }
+          }
         );
         runStatus = runData.status;
         info(`\u{1F504} Current run status: ${runStatus}`);
@@ -23667,7 +23673,10 @@ Note: The workflow is still running but we have stopped waiting. You can check t
     setOutput("workflowId", foundWorkflow.id);
     if (syncStatus && waitForCompletion) {
       const { data: finalRunData } = await octokit.request(
-        `GET /repos/${owner}/${repo}/actions/runs/${dispatchResp.data.workflow_run_id}`
+        `GET /repos/${owner}/${repo}/actions/runs/${dispatchResp.data.workflow_run_id}`,
+        {
+          headers: { "x-github-api-version": API_VERSION }
+        }
       );
       const conclusion = finalRunData.conclusion;
       if (conclusion === "failure") {
