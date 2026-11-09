@@ -23584,7 +23584,7 @@ function getOctokit(token, options, ...additionalPlugins) {
 }
 
 // package.json
-var version = "1.3.2";
+var version = "1.3.3";
 
 // src/main.ts
 var API_VERSION = "2026-03-10";
@@ -23601,7 +23601,9 @@ async function run() {
       try {
         inputs = JSON.parse(inputsJson);
       } catch (e) {
-        error(`Failed to parse 'inputs' JSON string: ${e instanceof Error ? e.message : String(e)}`);
+        throw new Error(`Failed to parse 'inputs' JSON string: ${e instanceof Error ? e.message : String(e)}`, {
+          cause: e
+        });
       }
     }
     const octokit = getOctokit(token);
@@ -23640,7 +23642,7 @@ async function run() {
     if (waitForCompletion) {
       info(`\u23F3 Waiting for workflow run to complete with a timeout of ${timeoutSeconds} seconds...`);
       const startTime = Date.now();
-      while (runStatus === "in_progress" || runStatus === "queued" || runStatus === "waiting") {
+      while (runStatus === "in_progress" || runStatus === "queued" || runStatus === "waiting" || runStatus === "pending") {
         if ((Date.now() - startTime) / 1e3 > timeoutSeconds) {
           warning(
             `\u26A0\uFE0F Workflow run did not complete within ${timeoutSeconds} seconds, timing out.
